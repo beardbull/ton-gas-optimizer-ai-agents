@@ -24,3 +24,9 @@ AI agents execute many small transactions → high gas costs on TON.
 
 ## 🛠️ Built With
 TON, Gemini AI, JavaScript, Node.js, MCP
+## 🔮 Future Improvements
+
+- 🔗 Real-time TON network data via `toncenter.com` API
+- 🧠 Gemini AI integration for production decisions
+- 📈 Historical analytics dashboard
+- 🔐 Wallet connection for one-click optimization
