@@ -1,0 +1,17 @@
+{
+  "name": "ton-gas-optimizer-ai-agents",
+  "version": "1.0.0",
+  "description": "AI-powered gas optimization for TON blockchain agents",
+  "main": "src/gasOptimizer.js",
+  "scripts": {
+    "start": "node demo/server.js",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": ["TON", "AI", "gas-optimization", "blockchain", "Gemini"],
+  "license": "MIT",
+  "dependencies": {
+    "@ton/ton": "^15.0.0",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.5"
+  }
+}
