@@ -1,8 +1,11 @@
-# demo/app.py - Streamlit with TON Connect
+# demo/app.py - Streamlit with TonConnect button
 import streamlit as st
 import json
 
 st.set_page_config(page_title="TON Gas Optimizer AI", page_icon="⚡", layout="wide")
+
+# TonConnect manifest URL (create this file in your repo root)
+MANIFEST_URL = "https://raw.githubusercontent.com/beardbull/ton-gas-optimizer-ai-agents/main/tonconnect-manifest.json"
 
 st.title("⚡ TON Agent GasOptimizer + Gemini AI")
 st.markdown("""
@@ -10,12 +13,17 @@ st.markdown("""
 *Built for The Rise of AI Agents Hackathon • Lablab.ai*
 """)
 
-# TON Connect Widget (HTML injection)
-st.markdown("""
-<div style="text-align: right; margin-bottom: 20px;">
-  <div id="ton-connect"></div>
-</div>
-""", unsafe_allow_html=True)
+# TonConnect Widget via HTML/JS
+st.components.v1.html(f"""
+<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+<div id="ton-connect"></div>
+<script>
+  const tonConnectUI = window.TonConnectUI.create({{
+    manifestUrl: "{MANIFEST_URL}",
+    buttonRootId: "ton-connect"
+  }});
+</script>
+""", height=60)
 
 # Sidebar
 with st.sidebar:
@@ -24,12 +32,13 @@ with st.sidebar:
     # TON Network Status
     st.subheader("📊 TON Testnet")
     st.metric("Network", "Testnet")
-    st.metric("Status", "🟢 Connected")
+    st.metric("Status", "🟢 Ready")
     
-    # Wallet info (mock for now)
+    # Wallet info (will populate after connect)
     st.markdown("---")
     st.markdown("**Wallet**")
-    wallet_address = st.text_input("Wallet Address", placeholder="UQ...")
+    wallet_placeholder = st.empty()
+    wallet_placeholder.info("🔗 Connect wallet above")
     
     operations_count = st.slider("Operations count", 1, 20, 5)
     network_load = st.slider("Network load %", 0, 100, 56)
