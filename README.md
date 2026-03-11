@@ -1,5 +1,8 @@
 # ⚡ TON Agent GasOptimizer + Gemini AI
 
+![Project Cover](assets/cover.png)
+
+
 > **Submitted to:** [The Rise of AI Agents Hackathon](https://lablab.ai/event/the-rise-of-ai-agents-hackathon) • Lablab.ai
 
 **AI-powered gas optimization for TON blockchain agents**
@@ -57,3 +60,4 @@ This Streamlit demo uses **simulated wallet connection** for reliable presentati
 ![Demo Screenshot](assets/demo-screenshot.png)
 
 *Interface: Connect Wallet → Run AI Optimization → See gas savings!*
+
