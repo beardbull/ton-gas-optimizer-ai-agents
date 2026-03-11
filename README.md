@@ -30,3 +30,24 @@ TON, Gemini AI, JavaScript, Node.js, MCP
 - 🧠 Gemini AI integration for production decisions
 - 📈 Historical analytics dashboard
 - 🔐 Wallet connection for one-click optimization
+
+## 🧪 Demo Mode
+
+This Streamlit demo uses **simulated wallet connection** for reliable presentation:
+
+| Feature | Demo | Production |
+|---------|------|-----------|
+| 🔗 Wallet Connect | Mock address generator | TonConnect UI + real wallet |
+| 💰 Balance | Random 10-100 TON | Real balance from TON API |
+| 📤 Transactions | Mock hash + status | Real testnet/mainnet tx |
+| 📊 Network Data | Simulated load/gas | Real toncenter.com API |
+
+**Why?** Ensures 100% reliable demo for hackathon judging.  
+**Production code** in `src/tonClient.js` is ready for real TON integration.
+
+## 🚀 Production Roadmap
+
+- [ ] Activate TonConnect widget (when Streamlit JS support improves)
+- [ ] Connect real TON testnet API for live data
+- [ ] Enable real transaction signing & submission
+- [ ] Add mainnet support with security audit
