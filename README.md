@@ -51,3 +51,9 @@ This Streamlit demo uses **simulated wallet connection** for reliable presentati
 - [ ] Connect real TON testnet API for live data
 - [ ] Enable real transaction signing & submission
 - [ ] Add mainnet support with security audit
+
+## 🎬 Demo Preview
+
+![Demo Screenshot](assets/demo-screenshot.png)
+
+*Interface: Connect Wallet → Run AI Optimization → See gas savings!*
