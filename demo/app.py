@@ -1,4 +1,4 @@
-# demo/app.py - Streamlit with slider + number input (fixed sync)
+# demo/app.py - Streamlit with slider + number input (BOTH visible)
 import streamlit as st, requests, time, re, hashlib, random
 
 TON_API_KEY = st.secrets.get("TON_API_KEY", "")
@@ -65,7 +65,7 @@ st.markdown("""
 for key in ["wallet_connected","wallet_address","wallet_balance"]:
     if key not in st.session_state: st.session_state[key] = False if key=="wallet_connected" else ""
 
-# Initialize ops count
+# Default ops count
 if "ops_count" not in st.session_state:
     st.session_state.ops_count = 5
 
@@ -107,12 +107,21 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Operations Settings**")
     
-    # Slider and number input - use same key for automatic sync
-    ops = st.slider("Operations count", 1, 20, st.session_state.ops_count, key="ops_slider")
+    # TWO WIDGETS: Slider + Number Input (both visible)
+    st.caption("Set operations count:")
+    
+    # Row 1: Slider
+    slider_val = st.slider("📊 Slider", 1, 20, st.session_state.ops_count, key="slider_key")
+    
+    # Row 2: Number Input Box
+    input_val = st.number_input("🔢 Type value", 1, 20, st.session_state.ops_count, key="input_key")
+    
+    # Use the most recent value (input takes priority if changed)
+    ops = input_val if input_val != slider_val else slider_val
     st.session_state.ops_count = ops
     
-    # Show current value in a box below slider
-    st.markdown(f"**Current:** `{ops} operations`")
+    # Show current value
+    st.info(f"**Using:** `{ops} operations`")
     
     run_btn = st.button("🚀 Run AI Optimization", type="primary", disabled=not st.session_state.wallet_connected)
     test_btn = st.button("📤 Send Test Transaction", type="secondary", disabled=not st.session_state.wallet_connected)
