@@ -1,2 +1,4 @@
 streamlit
 requests
+pytonlib
+ton-http-api
