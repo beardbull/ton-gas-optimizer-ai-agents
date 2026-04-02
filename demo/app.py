@@ -1,13 +1,13 @@
-# demo/app.py - Streamlit with slider + number input (BOTH visible)
+# demo/app.py - Streamlit app with BOTH slider AND number input
 import streamlit as st, requests, time, re, hashlib, random
 
 TON_API_KEY = st.secrets.get("TON_API_KEY", "")
 TONCENTER_API = "https://testnet.toncenter.com/api/v2"
 
-def is_valid_address(addr: str) -> bool:
+def is_valid_address(addr):
     return bool(re.match(r'^(UQ|EQ)[a-zA-Z0-9_-]{46}$', addr))
 
-def get_balance(address: str) -> float | None:
+def get_balance(address):
     if not is_valid_address(address): return None
     try:
         params = {"address": address}
@@ -20,7 +20,7 @@ def get_balance(address: str) -> float | None:
         st.error(f"❌ TON API Error: {str(e)}")
         return None
 
-def get_gas_price() -> int:
+def get_gas_price():
     try:
         params = {"id": "21"}
         if TON_API_KEY: params["api_key"] = TON_API_KEY
@@ -29,7 +29,7 @@ def get_gas_price() -> int:
     except: pass
     return 5000
 
-def get_network_load() -> int:
+def get_network_load():
     try:
         params = {}
         if TON_API_KEY: params["api_key"] = TON_API_KEY
@@ -40,7 +40,7 @@ def get_network_load() -> int:
     except: pass
     return 50
 
-def calculate_savings(ops_count: int, load: int, gas: int) -> dict:
+def calculate_savings(ops_count, load, gas):
     base = 0.005
     separate = ops_count * base
     if ops_count >= 3 and load < 80:
@@ -55,20 +55,16 @@ def calculate_savings(ops_count: int, load: int, gas: int) -> dict:
 
 st.set_page_config(page_title="TON Gas Optimizer AI", page_icon="⚡", layout="wide")
 st.title("⚡ TON Agent GasOptimizer + Gemini AI")
-st.markdown("""
-**AI-powered gas optimization for TON blockchain**  
-*Built for The Rise of AI Agents Hackathon • Lablab.ai*
+st.markdown("**AI-powered gas optimization for TON blockchain**")
+st.caption("Built for The Rise of AI Agents Hackathon • Lablab.ai")
 
-> 🟢 **REAL TON TESTNET** — Live data from toncenter.com (no emulation)
-""")
+# Session state
+if "wallet_connected" not in st.session_state: st.session_state.wallet_connected = False
+if "wallet_address" not in st.session_state: st.session_state.wallet_address = ""
+if "wallet_balance" not in st.session_state: st.session_state.wallet_balance = 0
+if "ops_count" not in st.session_state: st.session_state.ops_count = 5
 
-for key in ["wallet_connected","wallet_address","wallet_balance"]:
-    if key not in st.session_state: st.session_state[key] = False if key=="wallet_connected" else ""
-
-# Default ops count
-if "ops_count" not in st.session_state:
-    st.session_state.ops_count = 5
-
+# Wallet connection UI
 col1, col2 = st.columns([4, 1])
 with col2:
     if not st.session_state.wallet_connected:
@@ -77,7 +73,7 @@ with col2:
             if not is_valid_address(addr):
                 st.error("❌ Invalid address format")
             else:
-                with st.spinner("Fetching REAL balance from TON Testnet..."):
+                with st.spinner("Fetching balance..."):
                     bal = get_balance(addr)
                     if bal is not None:
                         st.session_state.wallet_connected = True
@@ -85,20 +81,25 @@ with col2:
                         st.session_state.wallet_balance = bal
                         st.rerun()
                     else:
-                        st.error("❌ Could not fetch balance. Check API key or address.")
+                        st.error("❌ Could not fetch balance")
     else:
         st.success(f"✅ {st.session_state.wallet_address[:12]}...")
-        st.metric("Balance", f"{st.session_state.wallet_balance:.4f} TON", "🟢 Real Testnet")
+        st.metric("Balance", f"{st.session_state.wallet_balance:.4f} TON", "🟢 Testnet")
         if st.button("🔌 Disconnect"):
-            for k in ["wallet_connected","wallet_address","wallet_balance"]:
-                st.session_state[k] = False if k=="wallet_connected" else ""
+            st.session_state.wallet_connected = False
+            st.session_state.wallet_address = ""
+            st.session_state.wallet_balance = 0
             st.rerun()
 
+# Sidebar with settings
 with st.sidebar:
     st.header("⚙️ Settings")
     st.subheader("📊 TON Testnet — LIVE")
-    with st.spinner("Loading real network data..."):
-        gas, load = get_gas_price(), get_network_load()
+    
+    with st.spinner("Loading..."):
+        gas = get_gas_price()
+        load = get_network_load()
+    
     st.metric("Network", "Testnet")
     st.metric("Status", "🟢 Connected" if TON_API_KEY else "🟡 No API Key")
     st.metric("Gas Price", f"{gas} nanoTON")
@@ -107,39 +108,48 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Operations Settings**")
     
-    # TWO WIDGETS: Slider + Number Input (both visible)
+    # TWO INPUTS: Slider AND Number Input Box
     st.caption("Set operations count:")
     
     # Row 1: Slider
-    slider_val = st.slider("📊 Slider", 1, 20, st.session_state.ops_count, key="slider_key")
+    slider_value = st.slider("📊 Slider", 1, 20, st.session_state.ops_count, key="slider")
     
-    # Row 2: Number Input Box
-    input_val = st.number_input("🔢 Type value", 1, 20, st.session_state.ops_count, key="input_key")
+    # Row 2: Number Input Box (THIS IS THE BOX YOU WANT!)
+    input_value = st.number_input("🔢 Type number", min_value=1, max_value=20, value=st.session_state.ops_count, key="input_box")
     
-    # Use the most recent value (input takes priority if changed)
-    ops = input_val if input_val != slider_val else slider_val
+    # Use input box value if changed, otherwise use slider
+    if input_value != st.session_state.ops_count:
+        ops = input_value
+    else:
+        ops = slider_value
+    
     st.session_state.ops_count = ops
-    
-    # Show current value
     st.info(f"**Using:** `{ops} operations`")
     
+    # Buttons
     run_btn = st.button("🚀 Run AI Optimization", type="primary", disabled=not st.session_state.wallet_connected)
     test_btn = st.button("📤 Send Test Transaction", type="secondary", disabled=not st.session_state.wallet_connected)
 
+# Main optimization logic
 if run_btn:
-    with st.spinner("🤖 AI analyzing REAL testnet data..."):
-        gas, load = get_gas_price(), get_network_load()
+    with st.spinner("🤖 AI analyzing..."):
+        gas = get_gas_price()
+        load = get_network_load()
         result = calculate_savings(ops, load, gas)
+        
         st.success("✅ AI Decision Ready!")
-        c1,c2,c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
         with c1: st.metric("Should Batch?", "✅ Yes" if result["should_batch"] else "❌ No")
         with c2: st.metric("Savings", f"{result['savings_percent']:.1f}%")
         with c3: st.metric("Confidence", "85%")
+        
         st.info(f"🧠 Factors: {ops} ops • {load}% load • {gas} nanoTON")
         st.markdown("---")
-        ca,cb = st.columns(2)
+        
+        ca, cb = st.columns(2)
         with ca: st.error(f"❌ Without AI: {result['separate_cost']:.4f} TON")
         with cb: st.success(f"✅ With AI: {result['batched_cost']:.4f} TON")
+        
         if result["savings_ton"] > 0:
             st.markdown(f"**💵 Save:** `{result['savings_ton']:.4f} TON`")
 
@@ -150,4 +160,4 @@ if test_btn:
         st.caption(f"🔍 [View on TON Scan](https://testnet.tonscan.org/address/{st.session_state.wallet_address})")
 
 st.markdown("---")
-st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **REAL TON TESTNET DATA** • No emulation")
+st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **REAL TON TESTNET DATA**")
