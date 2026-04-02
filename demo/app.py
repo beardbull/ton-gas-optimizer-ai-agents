@@ -1,6 +1,5 @@
 # demo/app.py - Streamlit with resilient TON integration
 import streamlit as st, sys, os
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 from tonClient import get_balance, get_gas_price, get_network_load, calculate_savings, is_valid_address
 
 st.set_page_config(page_title="TON Gas Optimizer AI", page_icon="⚡", layout="wide")
@@ -83,3 +82,4 @@ if test_btn:
 
 st.markdown("---")
 st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • Live testnet data via toncenter.com (fallback enabled)")
+
