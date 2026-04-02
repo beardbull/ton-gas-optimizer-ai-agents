@@ -1,4 +1,4 @@
-# demo/app.py - Streamlit app with BOTH slider AND number input
+# demo/app.py - Streamlit with BOTH slider AND number input
 import streamlit as st, requests, time, re, hashlib, random
 
 TON_API_KEY = st.secrets.get("TON_API_KEY", "")
@@ -17,7 +17,7 @@ def get_balance(address):
         nano = int(resp.json().get("result", {}).get("balance", 0))
         return nano / 1e9
     except Exception as e:
-        st.error(f"❌ TON API Error: {str(e)}")
+        st.error(f"TON API Error: {str(e)}")
         return None
 
 def get_gas_price():
@@ -58,13 +58,11 @@ st.title("⚡ TON Agent GasOptimizer + Gemini AI")
 st.markdown("**AI-powered gas optimization for TON blockchain**")
 st.caption("Built for The Rise of AI Agents Hackathon • Lablab.ai")
 
-# Session state
 if "wallet_connected" not in st.session_state: st.session_state.wallet_connected = False
 if "wallet_address" not in st.session_state: st.session_state.wallet_address = ""
 if "wallet_balance" not in st.session_state: st.session_state.wallet_balance = 0
 if "ops_count" not in st.session_state: st.session_state.ops_count = 5
 
-# Wallet connection UI
 col1, col2 = st.columns([4, 1])
 with col2:
     if not st.session_state.wallet_connected:
@@ -91,7 +89,6 @@ with col2:
             st.session_state.wallet_balance = 0
             st.rerun()
 
-# Sidebar with settings
 with st.sidebar:
     st.header("⚙️ Settings")
     st.subheader("📊 TON Testnet — LIVE")
@@ -108,29 +105,21 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Operations Settings**")
     
-    # TWO INPUTS: Slider AND Number Input Box
-    st.caption("Set operations count:")
+    # SLIDER
+    slider_value = st.slider("📊 Slider (drag)", 1, 20, st.session_state.ops_count, key="slider_key")
     
-    # Row 1: Slider
-    slider_value = st.slider("📊 Slider", 1, 20, st.session_state.ops_count, key="slider")
+    # NUMBER INPUT BOX
+    input_value = st.number_input("🔢 Or type number", min_value=1, max_value=20, value=st.session_state.ops_count, key="input_box_key")
     
-    # Row 2: Number Input Box (THIS IS THE BOX YOU WANT!)
-    input_value = st.number_input("🔢 Type number", min_value=1, max_value=20, value=st.session_state.ops_count, key="input_box")
-    
-    # Use input box value if changed, otherwise use slider
-    if input_value != st.session_state.ops_count:
-        ops = input_value
-    else:
-        ops = slider_value
-    
+    # Use input value if changed, otherwise slider
+    ops = input_value if input_value != st.session_state.ops_count else slider_value
     st.session_state.ops_count = ops
+    
     st.info(f"**Using:** `{ops} operations`")
     
-    # Buttons
     run_btn = st.button("🚀 Run AI Optimization", type="primary", disabled=not st.session_state.wallet_connected)
     test_btn = st.button("📤 Send Test Transaction", type="secondary", disabled=not st.session_state.wallet_connected)
 
-# Main optimization logic
 if run_btn:
     with st.spinner("🤖 AI analyzing..."):
         gas = get_gas_price()
