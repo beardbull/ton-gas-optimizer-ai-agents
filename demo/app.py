@@ -1,4 +1,4 @@
-# demo/app.py - Streamlit with slider + number input for Operations count
+# demo/app.py - Streamlit with slider + number input (fixed sync)
 import streamlit as st, requests, time, re, hashlib, random
 
 TON_API_KEY = st.secrets.get("TON_API_KEY", "")
@@ -65,6 +65,10 @@ st.markdown("""
 for key in ["wallet_connected","wallet_address","wallet_balance"]:
     if key not in st.session_state: st.session_state[key] = False if key=="wallet_connected" else ""
 
+# Initialize ops count
+if "ops_count" not in st.session_state:
+    st.session_state.ops_count = 5
+
 col1, col2 = st.columns([4, 1])
 with col2:
     if not st.session_state.wallet_connected:
@@ -103,20 +107,12 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("**Operations Settings**")
     
-    # Slider + Number Input side by side
-    col_s1, col_s2 = st.columns([3, 1])
-    with col_s1:
-        ops_slider = st.slider("Count", 1, 20, 5, key="ops_slider", label_visibility="collapsed")
-    with col_s2:
-        ops_input = st.number_input("Ops", 1, 20, 5, key="ops_input", label_visibility="collapsed")
+    # Slider and number input - use same key for automatic sync
+    ops = st.slider("Operations count", 1, 20, st.session_state.ops_count, key="ops_slider")
+    st.session_state.ops_count = ops
     
-    # Sync: if user changes slider, update input; if user changes input, update slider
-    if st.session_state.ops_slider != st.session_state.ops_input:
-        # Determine which was changed last (simple heuristic: use input if different)
-        ops = st.session_state.ops_input
-        st.session_state.ops_slider = ops
-    else:
-        ops = st.session_state.ops_slider
+    # Show current value in a box below slider
+    st.markdown(f"**Current:** `{ops} operations`")
     
     run_btn = st.button("🚀 Run AI Optimization", type="primary", disabled=not st.session_state.wallet_connected)
     test_btn = st.button("📤 Send Test Transaction", type="secondary", disabled=not st.session_state.wallet_connected)
