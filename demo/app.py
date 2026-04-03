@@ -1,4 +1,4 @@
-# demo/app.py - TON Gas Optimizer AI - FINAL WORKING VERSION
+# demo/app.py - TON Gas Optimizer AI - FINAL WITH DEMO MODE
 import streamlit as st
 import requests
 import time
@@ -7,48 +7,49 @@ import re
 TONCENTER_API_V2 = "https://testnet.toncenter.com/api/v2"
 
 @st.cache_data(ttl=60)
-def fetch_balance(address):
-    """Fetch balance - try multiple address formats"""
+def fetch_balance(address, use_demo=False):
+    """Fetch balance - with demo fallback"""
+    if use_demo:
+        # Demo mode: deterministic mock based on address hash
+        import hashlib, random
+        seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
+        random.seed(seed)
+        return round(random.uniform(20.0, 30.0), 4), None, True
+    
     if not is_valid_address(address):
-        return None, "Invalid address format"
+        return None, "Invalid address format", False
     
-    # Try address as-is first (most common case)
-    urls_to_try = [
-        f"{TONCENTER_API_V2}/account?address={address}",
-        f"{TONCENTER_API_V2}/account?address={address.lower()}",
-    ]
-    
-    for url in urls_to_try:
-        try:
-            resp = requests.get(url, timeout=10)
-            # Log for debugging (visible in Streamlit logs)
-            st.write(f"🔍 Trying: {url[:80]}... Status: {resp.status_code}")
-            
-            data = resp.json()
-            if data.get("ok"):
-                nano = int(data["result"]["balance"])
-                return nano / 1e9, None
-            elif "not found" in str(data.get("error", "")).lower():
-                continue  # Try next format
-            else:
-                return None, data.get("error", "API error")
-        except Exception as e:
-            continue  # Try next format
-    
-    return None, "Address not found in testnet (may need raw format)"
+    try:
+        # Use params dict for proper URL encoding
+        resp = requests.get(
+            f"{TONCENTER_API_V2}/account",
+            params={"address": address},
+            timeout=10
+        )
+        data = resp.json()
+        
+        if data.get("ok"):
+            nano = int(data["result"]["balance"])
+            return nano / 1e9, None, False
+        elif resp.status_code == 404:
+            return None, "Address not found in testnet index", False
+        else:
+            return None, data.get("error", f"API error {resp.status_code}"), False
+    except Exception as e:
+        return None, f"{type(e).__name__}: {str(e)[:60]}", False
 
 @st.cache_data(ttl=60)
 def fetch_gas_price():
     try:
-        resp = requests.get(f"{TONCENTER_API_V2}/getConfig?id=21", timeout=5)
+        resp = requests.get(f"{TONCENTER_API_V2}/getConfig", params={"id": "21"}, timeout=5)
         data = resp.json()
         if data.get("ok"):
             val = data.get("result", {}).get("value", "")
             if val and str(val).isdigit():
-                return int(val), None
-        return 5000 + (int(time.time()) % 2000), None
+                return int(val), False
+        return 5000 + (int(time.time()) % 2000), False
     except:
-        return 5000 + (int(time.time()) % 2000), None
+        return 5000 + (int(time.time()) % 2000), False
 
 @st.cache_data(ttl=60)
 def fetch_network_load():
@@ -57,10 +58,10 @@ def fetch_network_load():
         data = resp.json()
         if data.get("ok"):
             seqno = data.get("result", {}).get("last", {}).get("seqno", 0)
-            return 30 + (seqno % 50), None
-        return 40 + (int(time.time()) % 40), None
+            return 30 + (seqno % 50), False
+        return 40 + (int(time.time()) % 40), False
     except:
-        return 40 + (int(time.time()) % 40), None
+        return 40 + (int(time.time()) % 40), False
 
 def is_valid_address(addr):
     return bool(addr and len(addr) == 48 and re.match(r'^(UQ|EQ)[a-zA-Z0-9_-]{46}$', addr))
@@ -82,33 +83,48 @@ st.title("⚡ TON Agent GasOptimizer + Gemini AI")
 st.markdown("**AI-powered gas optimization for TON blockchain**")
 st.caption("Built for The Rise of AI Agents Hackathon • Lablab.ai")
 
-for k in ["wallet_connected","wallet_address","wallet_balance","ops_count"]:
+for k in ["wallet_connected","wallet_address","wallet_balance","ops_count","demo_mode"]:
     if k not in st.session_state:
-        st.session_state[k] = False if k=="wallet_connected" else (5 if k=="ops_count" else "")
+        st.session_state[k] = False if k in ["wallet_connected","demo_mode"] else (5 if k=="ops_count" else "")
 
 col1, col2 = st.columns([4, 1])
 with col2:
     if not st.session_state.wallet_connected:
         addr = st.text_input("Testnet Address", placeholder="UQ... or EQ... (48 chars)", key="addr_input", value=st.session_state.wallet_address if st.session_state.wallet_address else "")
-        if st.button("🔗 Connect", type="primary"):
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            connect_real = st.button("🔗 Real", type="primary")
+        with col_btn2:
+            connect_demo = st.button("🎭 Demo")
+        
+        if connect_real or connect_demo:
+            use_demo = connect_demo
             if not is_valid_address(addr):
                 st.error(f"❌ Invalid: must be 48 chars, starts with UQ/EQ")
             else:
-                with st.spinner("Connecting to TON Testnet..."):
+                with st.spinner("Connecting..." if not use_demo else "Loading demo..."):
                     fetch_balance.clear()
-                    bal, err = fetch_balance(addr)
+                    bal, err, is_demo = fetch_balance(addr, use_demo=use_demo)
                     if bal is not None:
-                        st.session_state.update({"wallet_connected": True, "wallet_address": addr, "wallet_balance": bal})
-                        st.success("✅ Connected!")
+                        st.session_state.update({
+                            "wallet_connected": True, 
+                            "wallet_address": addr, 
+                            "wallet_balance": bal,
+                            "demo_mode": is_demo
+                        })
+                        msg = "✅ Connected (Demo Mode)" if is_demo else "✅ Connected!"
+                        st.success(msg)
                         st.rerun()
                     else:
                         st.error(f"❌ {err}")
-                        st.info(f"🔍 Check address: [testnet.tonscan.org/address/{addr}](https://testnet.tonscan.org/address/{addr})\n\n💡 If balance shows there but not here, the API may need raw address format. Try copying address directly from TON Scan.")
+                        st.info("💡 Try: 1) Copy address directly from [TON Scan](https://testnet.tonscan.org/), 2) Use Demo Mode for hackathon demo")
     else:
-        st.success(f"✅ {st.session_state.wallet_address[:12]}...")
-        st.metric("Balance", f"{st.session_state.wallet_balance:.4f} TON", "🟢 Real Testnet")
+        mode_badge = "🎭 Demo" if st.session_state.demo_mode else "🟢 Real"
+        st.success(f"✅ {st.session_state.wallet_address[:12]}... {mode_badge}")
+        st.metric("Balance", f"{st.session_state.wallet_balance:.4f} TON", mode_badge)
         if st.button("🔌 Disconnect"):
-            st.session_state.update({"wallet_connected": False, "wallet_address": "", "wallet_balance": 0})
+            st.session_state.update({"wallet_connected": False, "wallet_address": "", "wallet_balance": 0, "demo_mode": False})
             st.rerun()
 
 with st.sidebar:
@@ -117,8 +133,8 @@ with st.sidebar:
     if st.button("🔄 Refresh"):
         fetch_balance.clear(); fetch_gas_price.clear(); fetch_network_load.clear()
         st.rerun()
-    gas, _ = fetch_gas_price()
-    load, _ = fetch_network_load()
+    gas, gas_err = fetch_gas_price()
+    load, load_err = fetch_network_load()
     st.metric("Network", "Testnet")
     st.metric("Gas Price", f"{gas} nanoTON")
     st.metric("Network Load", f"{load}%")
@@ -142,7 +158,8 @@ if run:
         c1.metric("Batch?", "✅ Yes" if res["should_batch"] else "❌ No")
         c2.metric("Savings", f"{res['savings_percent']:.1f}%")
         c3.metric("Confidence", "85%")
-        st.info(f"🧠 {ops} ops • {load}% load • {gas} nanoTON")
+        mode = "Demo" if st.session_state.demo_mode else "Real"
+        st.info(f"🧠 {ops} ops • {load}% load • {gas} nanoTON • {mode} data")
         ca,cb = st.columns(2)
         ca.error(f"❌ Without: {res['separate_cost']:.4f} TON")
         cb.success(f"✅ With AI: {res['batched_cost']:.4f} TON")
@@ -155,4 +172,4 @@ if test:
     st.caption(f"🔍 [View on TON Scan](https://testnet.tonscan.org/address/{st.session_state.wallet_address})")
 
 st.markdown("---")
-st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **Real TON Testnet Data**")
+st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **TON Testnet + Demo Fallback**")
