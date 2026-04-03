@@ -1,2 +1,8 @@
+# Перезаписываем requirements.txt
+@'
 streamlit>=1.40.0
 requests>=2.31.0
+python-dotenv>=1.0.0
+'@ | Out-File -FilePath "requirements.txt" -Encoding utf8
+
+echo "✅ requirements.txt обновлён"
