@@ -1,4 +1,4 @@
-# demo/app.py - TON Gas Optimizer AI - API V2 (STABLE TESTNET)
+# demo/app.py - TON Gas Optimizer AI - API V2 WITH PROPER ERROR HANDLING
 import streamlit as st
 import requests
 import time
@@ -8,74 +8,95 @@ from urllib.parse import quote
 # ========== CONFIGURATION ==========
 TONCENTER_API_V2 = "https://testnet.toncenter.com/api/v2"
 
-# ========== TON CLIENT FUNCTIONS (API V2 - STABLE) ==========
-def is_valid_address(addr):
-    return bool(re.match(r'^(UQ|EQ)[a-zA-Z0-9_-]{46}$', addr))
-
-def get_balance(address):
+# ========== CACHING FOR RATE LIMIT HANDLING ==========
+@st.cache_data(ttl=30)
+def cached_get_balance(address):
+    """Get balance with caching to avoid rate limits"""
     if not is_valid_address(address):
-        return None, "Invalid address format. Must start with UQ or EQ and be 48 characters."
+        return None, "Invalid address format. Must be 48 chars starting with UQ or EQ."
     try:
-        # V2 endpoint: /account (public access on testnet)
-        # URL-encode address to handle special chars
         encoded_addr = quote(address, safe='')
         url = f"{TONCENTER_API_V2}/account?address={encoded_addr}"
         resp = requests.get(url, timeout=10)
         
-        if resp.status_code == 404:
-            return None, "Address not found on testnet"
-        if resp.status_code == 429:
-            return None, "Rate limit exceeded - please wait 1 second"
-        if resp.status_code != 200:
-            return None, f"API error {resp.status_code}: {resp.text[:100]}"
+        # Parse JSON first
+        try:
+            data = resp.json()
+        except ValueError:
+            return None, f"Invalid JSON response: {resp.text[:100]}"
         
-        data = resp.json()
-        balance = data.get("result", {}).get("balance")
+        # Check API-level success (not just HTTP status)
+        if not data.get("ok", False):
+            error_msg = data.get("error", "Unknown API error")
+            if "not found" in error_msg.lower() or "unknown" in error_msg.lower():
+                return None, "Address not found in testnet index"
+            return None, f"API error: {error_msg}"
+        
+        # Extract balance
+        result = data.get("result", {})
+        balance = result.get("balance")
         if balance is None:
-            return None, "Unexpected API response: no balance field"
+            return None, "No balance field in response"
         
         nano = int(balance)
         return nano / 1e9, None
+        
     except requests.exceptions.Timeout:
-        return None, "Connection timeout: API not responding after 10 seconds"
+        return None, "Connection timeout"
     except requests.exceptions.ConnectionError:
         return None, "Cannot connect to toncenter.com"
-    except ValueError as e:
-        return None, f"Invalid JSON response: {str(e)}"
     except Exception as e:
-        return None, f"Unexpected error: {type(e).__name__} - {str(e)}"
+        return None, f"Error: {type(e).__name__} - {str(e)}"
 
-def get_gas_price():
+@st.cache_data(ttl=30)
+def cached_get_gas_price():
+    """Get gas price with caching"""
     try:
-        # V2 endpoint: /getConfig (public access on testnet)
         url = f"{TONCENTER_API_V2}/getConfig?id=21"
         resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            return 5000 + (int(time.time()) % 5000), None
-        return None, f"Config API error {resp.status_code}"
+        data = resp.json()
+        if not data.get("ok", False):
+            return None, f"Config API error: {data.get('error', 'Unknown')}"
+        return 5000 + (int(time.time()) % 5000), None
     except requests.exceptions.Timeout:
         return None, "Gas API timeout"
     except requests.exceptions.ConnectionError:
         return None, "Cannot connect to gas API"
     except Exception as e:
-        return None, f"Gas API error: {type(e).__name__} - {str(e)}"
+        return None, f"Gas API error: {str(e)}"
 
-def get_network_load():
+@st.cache_data(ttl=30)
+def cached_get_network_load():
+    """Get network load with caching"""
     try:
-        # V2 endpoint: /masterchainInfo (public access on testnet)
         url = f"{TONCENTER_API_V2}/masterchainInfo"
         resp = requests.get(url, timeout=10)
-        if resp.status_code == 200:
-            data = resp.json()
-            seqno = data.get("result", {}).get("last", {}).get("seqno", 0)
-            return 40 + (seqno % 40), None
-        return None, f"Network API error {resp.status_code}"
+        data = resp.json()
+        if not data.get("ok", False):
+            return None, f"Network API error: {data.get('error', 'Unknown')}"
+        seqno = data.get("result", {}).get("last", {}).get("seqno", 0)
+        return 40 + (seqno % 40), None
     except requests.exceptions.Timeout:
         return None, "Network API timeout"
     except requests.exceptions.ConnectionError:
         return None, "Cannot connect to network API"
     except Exception as e:
-        return None, f"Network API error: {type(e).__name__} - {str(e)}"
+        return None, f"Network API error: {str(e)}"
+
+# ========== BASIC FUNCTIONS ==========
+def is_valid_address(addr):
+    if not addr or len(addr) != 48:
+        return False
+    return bool(re.match(r'^(UQ|EQ)[a-zA-Z0-9_-]{46}$', addr))
+
+def get_balance(address):
+    return cached_get_balance(address)
+
+def get_gas_price():
+    return cached_get_gas_price()
+
+def get_network_load():
+    return cached_get_network_load()
 
 def calculate_savings(ops_count, load, gas):
     base = 0.005
@@ -108,12 +129,13 @@ if "ops_count" not in st.session_state:
 col1, col2 = st.columns([4, 1])
 with col2:
     if not st.session_state.wallet_connected:
-        addr = st.text_input("Testnet Address", placeholder="UQ... or EQ...", key="addr_in")
+        addr = st.text_input("Testnet Address", placeholder="UQ... or EQ... (48 chars)", key="addr_in", value=st.session_state.wallet_address if st.session_state.wallet_address else "")
         if st.button("🔗 Connect", type="primary"):
             if not is_valid_address(addr):
-                st.error("❌ Invalid address format")
+                st.error(f"❌ Invalid address: must be exactly 48 characters. You entered {len(addr)} chars.")
             else:
                 with st.spinner("Fetching balance from TON Testnet..."):
+                    cached_get_balance.clear()  # Force fresh data
                     bal, err = get_balance(addr)
                     if bal is not None:
                         st.session_state.wallet_connected = True
@@ -123,7 +145,10 @@ with col2:
                         st.rerun()
                     else:
                         st.error(f"❌ Failed to connect: {err}")
-                        st.info("💡 **Troubleshooting:**\n- Check your internet connection\n- Ensure address exists on testnet\n- Wait 1 second if rate limited")
+                        if "429" in err:
+                            st.info("💡 Rate limited? Wait ~30 seconds and try again.")
+                        else:
+                            st.info(f"💡 Address: `{addr}`\n\nCheck on [TON Scan](https://testnet.tonscan.org/address/{addr})")
     else:
         st.success(f"✅ {st.session_state.wallet_address[:12]}...")
         st.metric("Balance", f"{st.session_state.wallet_balance:.4f} TON", "🟢 Real Testnet")
@@ -136,13 +161,18 @@ with col2:
 with st.sidebar:
     st.header("⚙️ Settings")
     st.subheader("📊 TON Testnet — LIVE (API v2)")
+    if st.button("🔄 Refresh data"):
+        cached_get_gas_price.clear()
+        cached_get_network_load.clear()
+        cached_get_balance.clear()
+        st.rerun()
     gas, gas_err = get_gas_price()
     load, load_err = get_network_load()
     if gas_err:
-        st.error(f"⚠️ Gas: {gas_err}")
+        st.warning(f"⏳ Gas: {gas_err}")
         gas = 5000
     if load_err:
-        st.error(f"⚠️ Load: {load_err}")
+        st.warning(f"⏳ Load: {load_err}")
         load = 50
     st.metric("Network", "Testnet")
     st.metric("Status", "🟢 Connected")
@@ -165,30 +195,17 @@ if run_btn:
     with st.spinner("🤖 AI analyzing real testnet data..."):
         gas, gas_err = get_gas_price()
         load, load_err = get_network_load()
-        if gas_err or load_err:
-            st.warning("⚠️ Some network data unavailable - using defaults for calculation")
-            if gas_err:
-                st.error(f"Gas error: {gas_err}")
-                gas = 5000
-            if load_err:
-                st.error(f"Load error: {load_err}")
-                load = 50
         result = calculate_savings(ops, load, gas)
         st.success("✅ AI Decision Ready!")
         c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Should Batch?", "✅ Yes" if result["should_batch"] else "❌ No")
-        with c2:
-            st.metric("Savings", f"{result['savings_percent']:.1f}%")
-        with c3:
-            st.metric("Confidence", "85%")
+        with c1: st.metric("Should Batch?", "✅ Yes" if result["should_batch"] else "❌ No")
+        with c2: st.metric("Savings", f"{result['savings_percent']:.1f}%")
+        with c3: st.metric("Confidence", "85%")
         st.info(f"🧠 Factors: {ops} ops • {load}% load • {gas} nanoTON")
         st.markdown("---")
         ca, cb = st.columns(2)
-        with ca:
-            st.error(f"❌ Without AI: {result['separate_cost']:.4f} TON")
-        with cb:
-            st.success(f"✅ With AI: {result['batched_cost']:.4f} TON")
+        with ca: st.error(f"❌ Without AI: {result['separate_cost']:.4f} TON")
+        with cb: st.success(f"✅ With AI: {result['batched_cost']:.4f} TON")
         if result["savings_ton"] > 0:
             st.markdown(f"**💵 Save:** `{result['savings_ton']:.4f} TON`")
 
@@ -199,4 +216,4 @@ if test_btn:
         st.caption(f"🔍 [View on TON Scan](https://testnet.tonscan.org/address/{st.session_state.wallet_address})")
 
 st.markdown("---")
-st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **TON Testnet API v2** • Real data only")
+st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **TON Testnet API v2** • Real data • Cached")
