@@ -15,31 +15,58 @@
 AI agents execute many small transactions → high gas costs on TON.
 
 ## 💡 Solution
-• **Batching**: combine operations → **~70% gas savings**  
-• **AI Decision**: Algorithm analyzes network conditions (gas price, load) to recommend batching  
-• **MCP-compatible**: easy integration into any AI agent
+- **Batching**: combine operations → ~70% gas savings
+- **AI Decision**: Algorithm analyzes network conditions (gas price, load) to recommend batching
+- **MCP-compatible**: easy integration into any AI agent
 
 ---
 
 ## 📊 Current Status
 
-| Feature | Status | Details |
-|---------|--------|---------|
-| 📈 Gas Price | ✅ Real-time | Fetched from toncenter API v2 (`/getConfig`) |
-| 🌐 Network Load | ✅ Real-time | Fetched from toncenter API v2 (`/masterchainInfo`) |
-| 💰 Wallet Balance | ⚠️ Deterministic | API `/account` endpoint currently unavailable; uses hash-based fallback (same address = same value) |
-| 🧠 AI Optimization | ✅ Fully Working | Core logic is network-agnostic and fully testable |
-| 🔗 Network Switch | ✅ In UI | Toggle between Testnet/Mainnet in sidebar |
+| Feature | Status | Source |
+|---------|--------|--------|
+| 📈 Gas Price | ✅ Real-time | toncenter API v2 |
+| 🌐 Network Load | ✅ Real-time | toncenter API v2 |
+| 💰 Wallet Balance | ✅ Real-time | tonapi.io v2 |
+| 🧠 AI Optimization | ✅ Working | Core logic |
+| 🔗 Network Switch | ✅ In UI | Testnet/Mainnet toggle |
+| 🔗 Connect Mode | ✅ Real / Demo | Two buttons |
 
 ---
 
 ## 🛠️ Built With
-- **Blockchain**: TON (The Open Network)
-- **AI**: Algorithmic optimization (Gemini-ready architecture)
-- **Frontend**: Streamlit (Python)
-- **API**: toncenter.com API v2
-- **Integration**: MCP-compatible design
+- TON Blockchain
+- Streamlit (Python)
+- toncenter API v2
+- tonapi.io v2
+- MCP-compatible architecture
 
 ---
 
-## 🔮 Architecture
+## 🧪 Data Sources
+
+| Data | API Endpoint | Status |
+|------|-------------|--------|
+| Balance | tonapi.io/v2/accounts/{address} | ✅ Working |
+| Gas Price | toncenter.com/api/v2/getConfig?id=21 | ✅ Working |
+| Network Load | toncenter.com/api/v2/masterchainInfo | ✅ Working |
+
+> **Note:** Balance values may vary slightly across explorers due to indexing latency. This is normal for TON testnet.
+
+---
+
+## 🚀 How to Use
+1. Open: https://ton-gas-optimizer-ai-agents-....streamlit.app
+2. Select Network in sidebar (🧪 Testnet or 🌐 Mainnet)
+3. Enter valid TON address (48 chars, starts with UQ/EQ/0Q)
+4. Click 🔗 Real (fetch from API) or 🎭 Demo (deterministic)
+5. Click "🚀 Run AI Optimization" to see batching recommendation
+
+---
+
+## 🔧 Local Development
+```bash
+git clone https://github.com/beardbull/ton-gas-optimizer-ai-agents
+cd ton-gas-optimizer-ai-agents
+pip install -r requirements.txt
+streamlit run demo/app.py
