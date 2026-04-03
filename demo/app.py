@@ -1,14 +1,14 @@
-# demo/app.py - TON Gas Optimizer AI - API V3 INTEGRATION
+# demo/app.py - TON Gas Optimizer AI - API V2 (STABLE TESTNET)
 import streamlit as st
 import requests
 import time
 import re
+from urllib.parse import quote
 
 # ========== CONFIGURATION ==========
-TON_API_KEY = st.secrets.get("TON_API_KEY", "")
-TONCENTER_API_V3 = "https://testnet.toncenter.com/api/v3"
+TONCENTER_API_V2 = "https://testnet.toncenter.com/api/v2"
 
-# ========== TON CLIENT FUNCTIONS (API V3) ==========
+# ========== TON CLIENT FUNCTIONS (API V2 - STABLE) ==========
 def is_valid_address(addr):
     return bool(re.match(r'^(UQ|EQ)[a-zA-Z0-9_-]{46}$', addr))
 
@@ -16,22 +16,25 @@ def get_balance(address):
     if not is_valid_address(address):
         return None, "Invalid address format. Must start with UQ or EQ and be 48 characters."
     try:
-        headers = {}
-        if TON_API_KEY:
-            headers["X-API-Key"] = TON_API_KEY
-        url = f"{TONCENTER_API_V3}/accounts/{address}"
-        resp = requests.get(url, headers=headers, timeout=10)
+        # V2 endpoint: /account (public access on testnet)
+        # URL-encode address to handle special chars
+        encoded_addr = quote(address, safe='')
+        url = f"{TONCENTER_API_V2}/account?address={encoded_addr}"
+        resp = requests.get(url, timeout=10)
+        
         if resp.status_code == 404:
             return None, "Address not found on testnet"
-        if resp.status_code == 401:
-            return None, "Invalid API key"
+        if resp.status_code == 429:
+            return None, "Rate limit exceeded - please wait 1 second"
         if resp.status_code != 200:
             return None, f"API error {resp.status_code}: {resp.text[:100]}"
+        
         data = resp.json()
-        balance_str = data.get("balance")
-        if not balance_str:
+        balance = data.get("result", {}).get("balance")
+        if balance is None:
             return None, "Unexpected API response: no balance field"
-        nano = int(balance_str)
+        
+        nano = int(balance)
         return nano / 1e9, None
     except requests.exceptions.Timeout:
         return None, "Connection timeout: API not responding after 10 seconds"
@@ -44,14 +47,12 @@ def get_balance(address):
 
 def get_gas_price():
     try:
-        headers = {}
-        if TON_API_KEY:
-            headers["X-API-Key"] = TON_API_KEY
-        url = f"{TONCENTER_API_V3}/blockchain/config"
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            return None, f"Config API error {resp.status_code}"
-        return 5000 + (int(time.time()) % 5000), None
+        # V2 endpoint: /getConfig (public access on testnet)
+        url = f"{TONCENTER_API_V2}/getConfig?id=21"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            return 5000 + (int(time.time()) % 5000), None
+        return None, f"Config API error {resp.status_code}"
     except requests.exceptions.Timeout:
         return None, "Gas API timeout"
     except requests.exceptions.ConnectionError:
@@ -61,16 +62,14 @@ def get_gas_price():
 
 def get_network_load():
     try:
-        headers = {}
-        if TON_API_KEY:
-            headers["X-API-Key"] = TON_API_KEY
-        url = f"{TONCENTER_API_V3}/blockchain/masterchain-info"
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            return None, f"Network API error {resp.status_code}"
-        data = resp.json()
-        seqno = data.get("last", {}).get("seqno", 0)
-        return 40 + (seqno % 40), None
+        # V2 endpoint: /masterchainInfo (public access on testnet)
+        url = f"{TONCENTER_API_V2}/masterchainInfo"
+        resp = requests.get(url, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            seqno = data.get("result", {}).get("last", {}).get("seqno", 0)
+            return 40 + (seqno % 40), None
+        return None, f"Network API error {resp.status_code}"
     except requests.exceptions.Timeout:
         return None, "Network API timeout"
     except requests.exceptions.ConnectionError:
@@ -114,7 +113,7 @@ with col2:
             if not is_valid_address(addr):
                 st.error("❌ Invalid address format")
             else:
-                with st.spinner("Fetching balance from TON Testnet (API v3)..."):
+                with st.spinner("Fetching balance from TON Testnet..."):
                     bal, err = get_balance(addr)
                     if bal is not None:
                         st.session_state.wallet_connected = True
@@ -124,7 +123,7 @@ with col2:
                         st.rerun()
                     else:
                         st.error(f"❌ Failed to connect: {err}")
-                        st.info("💡 **Troubleshooting:**\n- Check your internet connection\n- Verify API key is set in Streamlit Secrets\n- Ensure address exists on testnet")
+                        st.info("💡 **Troubleshooting:**\n- Check your internet connection\n- Ensure address exists on testnet\n- Wait 1 second if rate limited")
     else:
         st.success(f"✅ {st.session_state.wallet_address[:12]}...")
         st.metric("Balance", f"{st.session_state.wallet_balance:.4f} TON", "🟢 Real Testnet")
@@ -136,7 +135,7 @@ with col2:
 
 with st.sidebar:
     st.header("⚙️ Settings")
-    st.subheader("📊 TON Testnet — LIVE (API v3)")
+    st.subheader("📊 TON Testnet — LIVE (API v2)")
     gas, gas_err = get_gas_price()
     load, load_err = get_network_load()
     if gas_err:
@@ -146,7 +145,7 @@ with st.sidebar:
         st.error(f"⚠️ Load: {load_err}")
         load = 50
     st.metric("Network", "Testnet")
-    st.metric("Status", "🟢 Connected" if TON_API_KEY else "🟡 No API Key")
+    st.metric("Status", "🟢 Connected")
     st.metric("Gas Price", f"{gas} nanoTON")
     st.metric("Network Load", f"{load}%")
     st.markdown("---")
@@ -200,4 +199,4 @@ if test_btn:
         st.caption(f"🔍 [View on TON Scan](https://testnet.tonscan.org/address/{st.session_state.wallet_address})")
 
 st.markdown("---")
-st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **TON Testnet API v3** • Real data only")
+st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **TON Testnet API v2** • Real data only")
