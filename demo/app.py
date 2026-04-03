@@ -1,53 +1,62 @@
-# demo/app.py - TON Gas Optimizer AI - HACKATHON READY VERSION
+# demo/app.py - TON Gas Optimizer AI - NETWORK SWITCH SUPPORT
 import streamlit as st
 import requests
 import time
 import re
 import hashlib
+import sys
+import os
 
-TONCENTER_API_V2 = "https://testnet.toncenter.com/api/v2"
+# Add parent dir to path to import config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import config
 
+@st.cache_data(ttl=30)
 def fetch_balance(address, use_demo=False):
-    """
-    Fetch balance from TON Testnet.
+    """Fetch balance with NETWORK switch support"""
     
-    Note: toncenter API v2 /account endpoint is currently unstable on testnet.
-    When API is unavailable, we use deterministic fallback: same address → same balance.
-    This ensures reliable demo experience while maintaining reproducibility.
-    """
-    # Demo mode: deterministic hash-based balance (not random!)
+    # Demo mode: deterministic hash-based (not random!)
     if use_demo:
         seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
         import random
         random.seed(seed)
         return round(random.uniform(20.0, 30.0), 4), None, True
     
-    # Validate address format
+    # Validate address
     if not (address and len(address) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', address)):
         return None, "Invalid address format", False
     
-    # Try real API (may fail due to testnet instability)
+    # Use mock API for local development
+    api_base = config.MOCK_API_BASE if config.LOCAL_DEV else config.API_BASE
+    
+    # Try real API
     try:
-        resp = requests.get(f"{TONCENTER_API_V2}/account", params={"address": address}, timeout=10)
+        resp = requests.get(f"{api_base}/account", params={"address": address}, timeout=10)
+        
         if resp.status_code == 200:
             data = resp.json()
             if data.get("ok") == True:
-                nano = int(data["result"]["balance"])
-                return nano / 1e9, None, False
-    except:
-        pass
-    
-    # Fallback: deterministic (same address = same balance, not random)
-    seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
-    import random
-    random.seed(seed)
-    return round(random.uniform(20.0, 30.0), 4), "Testnet API unstable - using deterministic fallback", True
+                balance_str = data.get("result", {}).get("balance")
+                if balance_str is not None:
+                    nano = int(balance_str)
+                    return nano / 1e9, None, False
+        
+        # API returned error - don't fallback silently, show it
+        return None, f"API error {resp.status_code}", False
+        
+    except requests.exceptions.Timeout:
+        return None, "API timeout", False
+    except requests.exceptions.ConnectionError:
+        return None, "Cannot connect to API", False
+    except Exception as e:
+        return None, f"Error: {type(e).__name__}", False
 
 @st.cache_data(ttl=30)
 def fetch_gas_price():
-    """Fetch gas price - this endpoint works reliably"""
+    """Fetch gas price with NETWORK switch"""
+    api_base = config.MOCK_API_BASE if config.LOCAL_DEV else config.API_BASE
     try:
-        resp = requests.get(f"{TONCENTER_API_V2}/getConfig", params={"id": "21"}, timeout=10)
+        resp = requests.get(f"{api_base}/getConfig", params={"id": "21"}, timeout=10)
         data = resp.json()
         if data.get("ok") == True:
             val = data.get("result", {}).get("value")
@@ -59,9 +68,10 @@ def fetch_gas_price():
 
 @st.cache_data(ttl=30)
 def fetch_network_load():
-    """Fetch network load - this endpoint works reliably"""
+    """Fetch network load with NETWORK switch"""
+    api_base = config.MOCK_API_BASE if config.LOCAL_DEV else config.API_BASE
     try:
-        resp = requests.get(f"{TONCENTER_API_V2}/masterchainInfo", timeout=10)
+        resp = requests.get(f"{api_base}/masterchainInfo", timeout=10)
         data = resp.json()
         if data.get("ok") == True:
             seqno = data.get("result", {}).get("last", {}).get("seqno", 0)
@@ -71,6 +81,7 @@ def fetch_network_load():
     return 40 + (int(time.time()) % 40)
 
 def calc_savings(ops, load, gas):
+    """AI optimization logic - network-agnostic"""
     base, sep = 0.005, ops * 0.005
     if ops >= 3 and load < 80:
         batched = base * (1 + 0.3 * (ops ** 0.5)) * (1 + load/250) * (gas/5000)
@@ -84,6 +95,12 @@ st.title("⚡ TON Agent GasOptimizer + Gemini AI")
 st.markdown("**AI-powered gas optimization for TON blockchain**")
 st.caption("Built for The Rise of AI Agents Hackathon • Lablab.ai")
 
+# Show network indicator
+network_badge = "🧪 Testnet" if config.NETWORK == "testnet" else "🌐 Mainnet"
+if config.LOCAL_DEV:
+    network_badge = "🔧 Local Mock"
+st.caption(f"Network: {network_badge} • API: {config.API_BASE if not config.LOCAL_DEV else config.MOCK_API_BASE}")
+
 for k in ["connected", "addr", "bal", "ops", "demo"]:
     if k not in st.session_state:
         st.session_state[k] = False if k in ["connected", "demo"] else (5 if k == "ops" else "")
@@ -91,24 +108,22 @@ for k in ["connected", "addr", "bal", "ops", "demo"]:
 c1, c2 = st.columns([4, 1])
 with c2:
     if not st.session_state.connected:
-        addr = st.text_input("Testnet Address", placeholder="UQ... (48 chars)", key="ai", value=st.session_state.addr or "")
+        addr = st.text_input(f"{config.NETWORK.title()} Address", placeholder="UQ... (48 chars)", key="ai", value=st.session_state.addr or "")
         b1, b2 = st.columns(2)
         
         if b1.button("🔗 Real", type="primary"):
             if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
                 st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
             else:
-                with st.spinner("Connecting to TON Testnet..."):
+                with st.spinner(f"Fetching from {config.NETWORK}..."):
                     bal, msg, is_demo = fetch_balance(addr, use_demo=False)
                     if bal is not None:
-                        st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": is_demo})
-                        badge = "🎭 Demo" if is_demo else "🟢 Real"
-                        st.success(f"✅ Connected {badge}")
-                        if msg: st.caption(f"ℹ️ {msg}")
+                        st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": False})
+                        st.success(f"✅ Connected 🟢 Real")
                         st.rerun()
                     else:
                         st.error(f"❌ {msg}")
-                        st.info("💡 Using 🎭 Demo mode ensures stable presentation")
+                        st.info(f"💡 Try: 1) Valid {config.NETWORK} address, 2) 🎭 Demo mode")
         
         if b2.button("🎭 Demo"):
             if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
@@ -117,7 +132,7 @@ with c2:
                 bal, _, _ = fetch_balance(addr, use_demo=True)
                 st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": True})
                 st.success("✅ Connected 🎭 Demo")
-                st.caption("ℹ️ Deterministic balance: same address = same value")
+                st.caption("ℹ️ Deterministic: same address = same balance")
                 st.rerun()
     else:
         badge = "🎭 Demo" if st.session_state.demo else "🟢 Real"
@@ -129,14 +144,14 @@ with c2:
 
 with st.sidebar:
     st.header("⚙️ Settings")
-    st.subheader("📊 TON Testnet — LIVE")
+    st.subheader(f"📊 {network_badge} — LIVE")
     if st.button("🔄 Refresh"):
         st.rerun()
     gas, load = fetch_gas_price(), fetch_network_load()
-    st.metric("Network", "Testnet")
+    st.metric("Network", config.NETWORK.title())
     st.metric("Gas Price", f"{gas} nanoTON")
     st.metric("Network Load", f"{load}%")
-    st.caption("ℹ️ Gas/Load: real API • Balance: API + deterministic fallback")
+    st.caption(f"ℹ️ API: {config.API_BASE if not config.LOCAL_DEV else 'Local Mock'}")
     st.markdown("---")
     st.markdown("**Operations:**")
     sv = st.slider("Slider", 1, 20, st.session_state.ops, key="sl")
@@ -166,8 +181,9 @@ if run:
 
 if test:
     st.success("✅ Transaction ready!")
-    st.json({"from": st.session_state.addr[:48]+"...", "to": "EQDemo...", "amount": "0.01 TON", "network": "testnet"})
-    st.caption(f"🔍 [View on TON Scan](https://testnet.tonscan.org/address/{st.session_state.addr})")
+    explorer_link = f"{config.EXPLORER_BASE}/address/{st.session_state.addr}"
+    st.json({"from": st.session_state.addr[:48]+"...", "to": "EQDemo...", "amount": "0.01 TON", "network": config.NETWORK})
+    st.caption(f"🔍 [View on Explorer]({explorer_link})")
 
 st.markdown("---")
-st.caption("🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **TON Testnet Integration** • Deterministic fallback for reliability")
+st.caption(f"🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **{config.NETWORK.title()}** • Deterministic fallback")
