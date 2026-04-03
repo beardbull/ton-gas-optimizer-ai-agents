@@ -2,62 +2,44 @@
 
 ![Project Cover](assets/cover.png)
 
-
 > **Submitted to:** [The Rise of AI Agents Hackathon](https://lablab.ai/event/the-rise-of-ai-agents-hackathon) • Lablab.ai
 
 **AI-powered gas optimization for TON blockchain agents**
 
+🔗 **Live Demo:** https://ton-gas-optimizer-ai-agents-....streamlit.app  
 🔗 **GitHub:** https://github.com/beardbull/ton-gas-optimizer-ai-agents
+
+---
 
 ## 🎯 Problem
 AI agents execute many small transactions → high gas costs on TON.
 
 ## 💡 Solution
-• **Batching**: combine operations → **71.5% gas savings**  
-• **AI Decision**: Gemini 1.5 Flash decides when to batch  
+• **Batching**: combine operations → **~70% gas savings**  
+• **AI Decision**: Algorithm analyzes network conditions (gas price, load) to recommend batching  
 • **MCP-compatible**: easy integration into any AI agent
 
-## 📊 Results
-| Metric | Value |
-|--------|-------|
-| 💰 Gas Savings | **~71.5%** |
-| 🤖 AI Confidence | 85% |
-| 🌐 Network | TON Testnet |
-| 🔐 Security | 0 vulnerabilities |
+---
+
+## 📊 Current Status
+
+| Feature | Status | Details |
+|---------|--------|---------|
+| 📈 Gas Price | ✅ **Real-time** | Fetched from toncenter API v2 (`/getConfig`) |
+| 🌐 Network Load | ✅ **Real-time** | Fetched from toncenter API v2 (`/masterchainInfo`) |
+| 💰 Wallet Balance | ⚠️ Deterministic | API `/account` endpoint currently unavailable; uses hash-based fallback (same address = same value) |
+| 🧠 AI Optimization | ✅ **Fully Working** | Core logic is network-agnostic and fully testable |
+| 🔗 Network Switch | ✅ In UI | Toggle between Testnet/Mainnet in sidebar |
+
+---
 
 ## 🛠️ Built With
-TON, Gemini AI, JavaScript, Node.js, MCP
-## 🔮 Future Improvements
+- **Blockchain**: TON (The Open Network)
+- **AI**: Algorithmic optimization (Gemini-ready architecture)
+- **Frontend**: Streamlit (Python)
+- **API**: toncenter.com API v2
+- **Integration**: MCP-compatible design
 
-- 🔗 Real-time TON network data via `toncenter.com` API
-- 🧠 Gemini AI integration for production decisions
-- 📈 Historical analytics dashboard
-- 🔐 Wallet connection for one-click optimization
+---
 
-## 🧪 Demo Mode
-
-This Streamlit demo uses **simulated wallet connection** for reliable presentation:
-
-| Feature | Demo | Production |
-|---------|------|-----------|
-| 🔗 Wallet Connect | Mock address generator | TonConnect UI + real wallet |
-| 💰 Balance | Random 10-100 TON | Real balance from TON API |
-| 📤 Transactions | Mock hash + status | Real testnet/mainnet tx |
-| 📊 Network Data | Simulated load/gas | Real toncenter.com API |
-
-**Why?** Ensures 100% reliable demo for hackathon judging.  
-**Production code** in `src/tonClient.js` is ready for real TON integration.
-
-## 🚀 Production Roadmap
-
-- [ ] Activate TonConnect widget (when Streamlit JS support improves)
-- [ ] Connect real TON testnet API for live data
-- [ ] Enable real transaction signing & submission
-- [ ] Add mainnet support with security audit
-
-## 🎬 Demo Preview
-
-![Demo Screenshot](assets/demo-screenshot.png)
-
-*Interface: Connect Wallet → Run AI Optimization → See gas savings!*
-
+## 🔮 Architecture
