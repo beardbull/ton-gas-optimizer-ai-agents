@@ -1,4 +1,4 @@
-# demo/app.py - TON Gas Optimizer AI - REAL BALANCE VIA tonapi.io
+# demo/app.py - TON Gas Optimizer AI - FIXED: Real/Demo buttons + correct tonapi.io URLs
 import streamlit as st
 import requests
 import time
@@ -24,7 +24,7 @@ API_ENDPOINTS = {
 def fetch_balance_real(address, network, use_demo=False):
     """Fetch balance from tonapi.io (working) or fallback to deterministic"""
     
-    # Demo mode only if explicitly requested
+    # Demo mode: ONLY when explicitly requested via Demo button
     if use_demo:
         seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
         import random
@@ -37,6 +37,7 @@ def fetch_balance_real(address, network, use_demo=False):
     # Try tonapi.io first (WORKS for balance!)
     try:
         tonapi_base = API_ENDPOINTS[network]["tonapi"]
+        # Correct URL format for tonapi.io
         tonapi_url = f"{tonapi_base}/accounts/{address}"
         resp = requests.get(tonapi_url, headers={"accept": "application/json"}, timeout=10)
         
@@ -54,7 +55,7 @@ def fetch_balance_real(address, network, use_demo=False):
     seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
     import random
     random.seed(seed)
-    return round(random.uniform(20.0, 30.0), 4), "Using deterministic fallback", True
+    return round(random.uniform(20.0, 30.0), 4), "API unavailable - deterministic fallback", True
 
 @st.cache_data(ttl=30)
 def fetch_gas_price(api_base):
@@ -103,11 +104,10 @@ for k in ["connected", "addr", "bal", "ops", "demo", "network"]:
     if k not in st.session_state:
         st.session_state[k] = False if k in ["connected", "demo"] else ("mainnet" if k == "network" else (5 if k == "ops" else ""))
 
-# Sidebar
+# Sidebar with Network Switch
 with st.sidebar:
     st.header("⚙️ Settings")
     
-    # Network selector
     st.subheader("🌐 Network")
     network_options = ["mainnet", "testnet"]
     selected_network = st.radio(
@@ -134,7 +134,6 @@ with st.sidebar:
     st.caption(f"Active: {network_badge}")
     st.divider()
     
-    # Real-time data
     st.subheader("📊 Live Network Data")
     if st.button("🔄 Refresh"):
         st.rerun()
@@ -142,7 +141,6 @@ with st.sidebar:
     load = fetch_network_load(api_base)
     st.metric("Gas Price", f"{gas} nanoTON")
     st.metric("Network Load", f"{load}%")
-    st.success("✅ Real-time from API")
     
     st.divider()
     st.markdown("**Operations:**")
@@ -159,17 +157,26 @@ Fetched from tonapi.io (real-time). May vary slightly across explorers
 due to indexing latency — normal for testnet.
 """)
 
-# Main content
+# Main content - Wallet Connection with TWO BUTTONS
 c1, c2 = st.columns([4, 1])
 with c2:
     if not st.session_state.connected:
         addr = st.text_input(f"{selected_network.title()} Address", placeholder="UQ... (48 chars)", key="ai", value=st.session_state.addr or "")
         
-        if st.button("🔗 Connect", type="primary", use_container_width=True):
+        # TWO SEPARATE BUTTONS: Real and Demo
+        col_real, col_demo = st.columns(2)
+        
+        with col_real:
+            btn_real = st.button("🔗 Real", type="primary", use_container_width=True)
+        with col_demo:
+            btn_demo = st.button("🎭 Demo", use_container_width=True)
+        
+        if btn_real:
+            # REAL MODE: try API first
             if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
                 st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
             else:
-                with st.spinner("Fetching balance..."):
+                with st.spinner("Fetching real balance..."):
                     bal, msg, is_demo = fetch_balance_real(addr, selected_network, use_demo=False)
                     if bal is not None:
                         st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": is_demo})
@@ -179,8 +186,20 @@ with c2:
                         st.rerun()
                     else:
                         st.error(f"❌ {msg}")
-                        st.info("💡 Try 🎭 Demo mode for stable presentation")
+        
+        if btn_demo:
+            # DEMO MODE: always use deterministic
+            if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
+                st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
+            else:
+                bal, _, _ = fetch_balance_real(addr, selected_network, use_demo=True)
+                st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": True})
+                st.success("✅ Connected 🎭 Demo")
+                st.caption("ℹ️ Deterministic: same address = same balance")
+                st.rerun()
+                
     else:
+        # Connected state
         badge = "🎭 Demo" if st.session_state.demo else "🟢 Real"
         st.success(f"✅ {st.session_state.addr[:12]}... {badge}")
         st.metric("Balance", f"{st.session_state.bal:.4f} TON", badge)
