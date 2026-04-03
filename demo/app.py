@@ -1,4 +1,4 @@
-# demo/app.py - TON Gas Optimizer AI - PRODUCTION READY
+# demo/app.py - TON Gas Optimizer AI - REAL BALANCE VIA tonapi.io
 import streamlit as st
 import requests
 import time
@@ -9,26 +9,56 @@ import hashlib
 API_ENDPOINTS = {
     "testnet": {
         "api": "https://testnet.toncenter.com/api/v2",
-        "explorer": "https://testnet.tonscan.org"
+        "explorer": "https://testnet.tonscan.org",
+        "tonapi": "https://testnet.tonapi.io/v2"
     },
     "mainnet": {
         "api": "https://toncenter.com/api/v2",
-        "explorer": "https://tonscan.org"
+        "explorer": "https://tonscan.org",
+        "tonapi": "https://tonapi.io/v2"
     }
 }
 # ============================
 
 @st.cache_data(ttl=30)
-def fetch_balance_deterministic(address):
-    """Deterministic balance: same address = same value (not random)"""
+def fetch_balance_real(address, network, use_demo=False):
+    """Fetch balance from tonapi.io (working) or fallback to deterministic"""
+    
+    # Demo mode only if explicitly requested
+    if use_demo:
+        seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
+        import random
+        random.seed(seed)
+        return round(random.uniform(20.0, 30.0), 4), None, True
+    
+    if not (address and len(address) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', address)):
+        return None, "Invalid address format", False
+    
+    # Try tonapi.io first (WORKS for balance!)
+    try:
+        tonapi_base = API_ENDPOINTS[network]["tonapi"]
+        tonapi_url = f"{tonapi_base}/accounts/{address}"
+        resp = requests.get(tonapi_url, headers={"accept": "application/json"}, timeout=10)
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            balance_str = data.get("balance")
+            if balance_str is not None:
+                nano = int(balance_str)
+                real_balance = nano / 1e9
+                return real_balance, None, False
+    except Exception as e:
+        pass  # Fall through to deterministic
+    
+    # Fallback: deterministic (same address = same value, not random)
     seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
     import random
     random.seed(seed)
-    return round(random.uniform(20.0, 30.0), 4)
+    return round(random.uniform(20.0, 30.0), 4), "Using deterministic fallback", True
 
 @st.cache_data(ttl=30)
 def fetch_gas_price(api_base):
-    """Fetch gas price - WORKING endpoint"""
+    """Fetch gas price from toncenter API"""
     try:
         resp = requests.get(f"{api_base}/getConfig", params={"id": "21"}, timeout=10)
         data = resp.json()
@@ -42,7 +72,7 @@ def fetch_gas_price(api_base):
 
 @st.cache_data(ttl=30)
 def fetch_network_load(api_base):
-    """Fetch network load - WORKING endpoint"""
+    """Fetch network load from toncenter API"""
     try:
         resp = requests.get(f"{api_base}/masterchainInfo", timeout=10)
         data = resp.json()
@@ -54,7 +84,7 @@ def fetch_network_load(api_base):
     return 40 + (int(time.time()) % 40)
 
 def calc_savings(ops, load, gas):
-    """AI optimization logic - core value of this project"""
+    """AI optimization logic - core value"""
     base, sep = 0.005, ops * 0.005
     if ops >= 3 and load < 80:
         batched = base * (1 + 0.3 * (ops ** 0.5)) * (1 + load/250) * (gas/5000)
@@ -104,7 +134,7 @@ with st.sidebar:
     st.caption(f"Active: {network_badge}")
     st.divider()
     
-    # Real-time data (these endpoints WORK)
+    # Real-time data
     st.subheader("📊 Live Network Data")
     if st.button("🔄 Refresh"):
         st.rerun()
@@ -122,13 +152,11 @@ with st.sidebar:
     st.session_state.ops = ops
     st.caption(f"Using: {ops} operations")
 
-# Info banner about API limitation
+# Info banner
 st.info("""
-**ℹ️ Note on Balance Data:**
-The toncenter public API `/account` endpoint is currently unavailable. 
-Balance values are computed deterministically (same address → same value) 
-to ensure stable demo experience. Gas and network data are fetched from 
-live API in real-time.
+**ℹ️ Balance Data:**
+Fetched from tonapi.io (real-time). May vary slightly across explorers 
+due to indexing latency — normal for testnet.
 """)
 
 # Main content
@@ -141,20 +169,26 @@ with c2:
             if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
                 st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
             else:
-                with st.spinner("Connecting..."):
-                    bal = fetch_balance_deterministic(addr)
-                    st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": True})
-                    st.success("✅ Connected")
-                    st.caption("ℹ️ Balance: deterministic (same address = same value)")
-                    st.rerun()
+                with st.spinner("Fetching balance..."):
+                    bal, msg, is_demo = fetch_balance_real(addr, selected_network, use_demo=False)
+                    if bal is not None:
+                        st.session_state.update({"connected": True, "addr": addr, "bal": bal, "demo": is_demo})
+                        badge = "🎭 Demo" if is_demo else "🟢 Real"
+                        st.success(f"✅ Connected {badge}")
+                        if msg: st.caption(f"ℹ️ {msg}")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {msg}")
+                        st.info("💡 Try 🎭 Demo mode for stable presentation")
     else:
-        st.success(f"✅ {st.session_state.addr[:12]}...")
-        st.metric("Balance", f"{st.session_state.bal:.4f} TON", "🎭 Deterministic")
+        badge = "🎭 Demo" if st.session_state.demo else "🟢 Real"
+        st.success(f"✅ {st.session_state.addr[:12]}... {badge}")
+        st.metric("Balance", f"{st.session_state.bal:.4f} TON", badge)
         if st.button("🔌 Disconnect", use_container_width=True):
             st.session_state.update({"connected": False, "addr": "", "bal": 0, "demo": False})
             st.rerun()
 
-# Run button
+# Run buttons
 run = st.button("🚀 Run AI Optimization", type="primary", disabled=not st.session_state.connected, key="run_btn")
 test = st.button("📤 Send Test Transaction", disabled=not st.session_state.connected, key="test_btn")
 
@@ -168,7 +202,8 @@ if run:
         a.metric("Batch?", "✅ Yes" if should else "❌ No")
         b.metric("Savings", f"{sav:.1f}%")
         c.metric("Confidence", "85%")
-        st.info(f"🧠 {ops} ops • {load}% load • {gas} nanoTON • {selected_network}")
+        mode = "Demo" if st.session_state.demo else "Real"
+        st.info(f"🧠 {ops} ops • {load}% load • {gas} nanoTON • {mode} • {selected_network}")
         x, y = st.columns(2)
         x.error(f"❌ Without: {sep:.4f} TON")
         y.success(f"✅ With AI: {bat:.4f} TON")
@@ -182,4 +217,4 @@ if test:
     st.caption(f"🔍 [View on Explorer]({explorer_link})")
 
 st.markdown("---")
-st.caption(f"🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **{selected_network.title()}** • Gas/Load: Real API • Balance: Deterministic")
+st.caption(f"🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **{selected_network.title()}** • Balance: tonapi.io • Gas/Load: toncenter API")
