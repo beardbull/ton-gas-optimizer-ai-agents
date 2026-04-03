@@ -1,9 +1,8 @@
-# demo/app.py - TON Gas Optimizer AI - FINAL RELIABLE VERSION
+# demo/app.py - TON Gas Optimizer AI - FINAL FIXED VERSION
 import streamlit as st, requests, time, re, hashlib
 
 TONCENTER_API_V2 = "https://testnet.toncenter.com/api/v2"
 
-@st.cache_data(ttl=30)
 def fetch_balance(address, use_demo=False):
     if use_demo:
         seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
@@ -65,7 +64,6 @@ with c2:
                 st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
             else:
                 with st.spinner("Connecting..."):
-                    fetch_balance.clear()
                     bal, msg, is_demo = fetch_balance(addr, use_demo=demo)
                     if bal is not None:
                         st.session_state.update({"connected":True,"addr":addr,"bal":bal,"demo":is_demo})
@@ -82,7 +80,7 @@ with c2:
 
 with st.sidebar:
     st.header("⚙️ Settings"); st.subheader("📊 TON Testnet — LIVE")
-    if st.button("🔄 Refresh"): fetch_balance.clear(); fetch_gas_price.clear(); fetch_network_load.clear(); st.rerun()
+    if st.button("🔄 Refresh"): st.rerun()
     gas, load = fetch_gas_price(), fetch_network_load()
     st.metric("Network", "Testnet"); st.metric("Gas Price", f"{gas} nanoTON"); st.metric("Network Load", f"{load}%")
     st.caption("ℹ️ Gas/Load: real API • Balance: API + deterministic fallback")
