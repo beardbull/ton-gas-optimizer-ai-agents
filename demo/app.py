@@ -1,4 +1,4 @@
-# demo/app.py - TON Gas Optimizer AI - FINAL WITH DEMO MODE
+# demo/app.py - TON Gas Optimizer AI - FINAL WITH ADDRESS FORMAT FIX
 import streamlit as st
 import requests
 import time
@@ -10,7 +10,6 @@ TONCENTER_API_V2 = "https://testnet.toncenter.com/api/v2"
 def fetch_balance(address, use_demo=False):
     """Fetch balance - with demo fallback"""
     if use_demo:
-        # Demo mode: deterministic mock based on address hash
         import hashlib, random
         seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
         random.seed(seed)
@@ -20,7 +19,7 @@ def fetch_balance(address, use_demo=False):
         return None, "Invalid address format", False
     
     try:
-        # Use params dict for proper URL encoding
+        # Try address as-is first
         resp = requests.get(
             f"{TONCENTER_API_V2}/account",
             params={"address": address},
@@ -32,6 +31,25 @@ def fetch_balance(address, use_demo=False):
             nano = int(data["result"]["balance"])
             return nano / 1e9, None, False
         elif resp.status_code == 404:
+            # Try alternative: maybe address needs different format
+            # Some testnet addresses use 0Q prefix instead of UQ
+            alt_address = address
+            if address.startswith("UQ"):
+                alt_address = "0Q" + address[2:]
+            elif address.startswith("0Q"):
+                alt_address = "UQ" + address[2:]
+            
+            if alt_address != address:
+                resp2 = requests.get(
+                    f"{TONCENTER_API_V2}/account",
+                    params={"address": alt_address},
+                    timeout=10
+                )
+                data2 = resp2.json()
+                if data2.get("ok"):
+                    nano = int(data2["result"]["balance"])
+                    return nano / 1e9, None, False
+            
             return None, "Address not found in testnet index", False
         else:
             return None, data.get("error", f"API error {resp.status_code}"), False
@@ -64,7 +82,10 @@ def fetch_network_load():
         return 40 + (int(time.time()) % 40), False
 
 def is_valid_address(addr):
-    return bool(addr and len(addr) == 48 and re.match(r'^(UQ|EQ)[a-zA-Z0-9_-]{46}$', addr))
+    """Accept both UQ/EQ and 0Q formats (48 chars)"""
+    if not addr or len(addr) != 48:
+        return False
+    return bool(re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr))
 
 def calculate_savings(ops_count, load, gas):
     base = 0.005
@@ -90,7 +111,7 @@ for k in ["wallet_connected","wallet_address","wallet_balance","ops_count","demo
 col1, col2 = st.columns([4, 1])
 with col2:
     if not st.session_state.wallet_connected:
-        addr = st.text_input("Testnet Address", placeholder="UQ... or EQ... (48 chars)", key="addr_input", value=st.session_state.wallet_address if st.session_state.wallet_address else "")
+        addr = st.text_input("Testnet Address", placeholder="UQ... or 0Q... or EQ... (48 chars)", key="addr_input", value=st.session_state.wallet_address if st.session_state.wallet_address else "")
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
@@ -101,7 +122,7 @@ with col2:
         if connect_real or connect_demo:
             use_demo = connect_demo
             if not is_valid_address(addr):
-                st.error(f"❌ Invalid: must be 48 chars, starts with UQ/EQ")
+                st.error(f"❌ Invalid: must be 48 chars, starts with UQ/EQ/0Q")
             else:
                 with st.spinner("Connecting..." if not use_demo else "Loading demo..."):
                     fetch_balance.clear()
@@ -118,7 +139,7 @@ with col2:
                         st.rerun()
                     else:
                         st.error(f"❌ {err}")
-                        st.info("💡 Try: 1) Copy address directly from [TON Scan](https://testnet.tonscan.org/), 2) Use Demo Mode for hackathon demo")
+                        st.info("💡 Try: 1) Copy address directly from [TON Scan](https://testnet.tonscan.org/), 2) Use 0Q... format if UQ... doesn't work, 3) Use Demo Mode")
     else:
         mode_badge = "🎭 Demo" if st.session_state.demo_mode else "🟢 Real"
         st.success(f"✅ {st.session_state.wallet_address[:12]}... {mode_badge}")
