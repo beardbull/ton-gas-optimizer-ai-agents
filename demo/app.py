@@ -1,9 +1,14 @@
-# demo/app.py - TON Gas Optimizer AI - FIXED: Real/Demo buttons + correct tonapi.io URLs
+# demo/app.py - TON Gas Optimizer AI - OPENROUTER AI INTEGRATION
 import streamlit as st
 import requests
 import time
 import re
 import hashlib
+import sys
+import os
+
+# Add parent dir to path for core imports
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # ========== CONFIG ==========
 API_ENDPOINTS = {
@@ -22,9 +27,7 @@ API_ENDPOINTS = {
 
 @st.cache_data(ttl=30)
 def fetch_balance_real(address, network, use_demo=False):
-    """Fetch balance from tonapi.io (working) or fallback to deterministic"""
-    
-    # Demo mode: ONLY when explicitly requested via Demo button
+    """Fetch balance from tonapi.io or fallback to deterministic"""
     if use_demo:
         seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
         import random
@@ -34,24 +37,19 @@ def fetch_balance_real(address, network, use_demo=False):
     if not (address and len(address) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', address)):
         return None, "Invalid address format", False
     
-    # Try tonapi.io first (WORKS for balance!)
     try:
         tonapi_base = API_ENDPOINTS[network]["tonapi"]
-        # Correct URL format for tonapi.io
         tonapi_url = f"{tonapi_base}/accounts/{address}"
         resp = requests.get(tonapi_url, headers={"accept": "application/json"}, timeout=10)
-        
         if resp.status_code == 200:
             data = resp.json()
             balance_str = data.get("balance")
             if balance_str is not None:
                 nano = int(balance_str)
-                real_balance = nano / 1e9
-                return real_balance, None, False
-    except Exception as e:
-        pass  # Fall through to deterministic
+                return nano / 1e9, None, False
+    except:
+        pass
     
-    # Fallback: deterministic (same address = same value, not random)
     seed = int(hashlib.md5(address.encode()).hexdigest()[:8], 16)
     import random
     random.seed(seed)
@@ -59,7 +57,6 @@ def fetch_balance_real(address, network, use_demo=False):
 
 @st.cache_data(ttl=30)
 def fetch_gas_price(api_base):
-    """Fetch gas price from toncenter API"""
     try:
         resp = requests.get(f"{api_base}/getConfig", params={"id": "21"}, timeout=10)
         data = resp.json()
@@ -73,7 +70,6 @@ def fetch_gas_price(api_base):
 
 @st.cache_data(ttl=30)
 def fetch_network_load(api_base):
-    """Fetch network load from toncenter API"""
     try:
         resp = requests.get(f"{api_base}/masterchainInfo", timeout=10)
         data = resp.json()
@@ -84,18 +80,9 @@ def fetch_network_load(api_base):
         pass
     return 40 + (int(time.time()) % 40)
 
-def calc_savings(ops, load, gas):
-    """AI optimization logic - core value"""
-    base, sep = 0.005, ops * 0.005
-    if ops >= 3 and load < 80:
-        batched = base * (1 + 0.3 * (ops ** 0.5)) * (1 + load/250) * (gas/5000)
-        sav = max(0, (sep - batched) / sep * 100)
-        return True, sep, batched, sav, sep - batched
-    return False, sep, sep, 0, 0
-
 # ========== UI ==========
 st.set_page_config(page_title="TON Gas Optimizer AI", page_icon="⚡", layout="wide")
-st.title("⚡ TON Agent GasOptimizer + Gemini AI")
+st.title("⚡ TON Agent GasOptimizer + AI")
 st.markdown("**AI-powered gas optimization for TON blockchain**")
 st.caption("Built for The Rise of AI Agents Hackathon • Lablab.ai")
 
@@ -104,7 +91,7 @@ for k in ["connected", "addr", "bal", "ops", "demo", "network"]:
     if k not in st.session_state:
         st.session_state[k] = False if k in ["connected", "demo"] else ("mainnet" if k == "network" else (5 if k == "ops" else ""))
 
-# Sidebar with Network Switch
+# Sidebar
 with st.sidebar:
     st.header("⚙️ Settings")
     
@@ -157,13 +144,12 @@ Fetched from tonapi.io (real-time). May vary slightly across explorers
 due to indexing latency — normal for testnet.
 """)
 
-# Main content - Wallet Connection with TWO BUTTONS
+# Main content - Wallet Connection
 c1, c2 = st.columns([4, 1])
 with c2:
     if not st.session_state.connected:
         addr = st.text_input(f"{selected_network.title()} Address", placeholder="UQ... (48 chars)", key="ai", value=st.session_state.addr or "")
         
-        # TWO SEPARATE BUTTONS: Real and Demo
         col_real, col_demo = st.columns(2)
         
         with col_real:
@@ -172,7 +158,6 @@ with c2:
             btn_demo = st.button("🎭 Demo", use_container_width=True)
         
         if btn_real:
-            # REAL MODE: try API first
             if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
                 st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
             else:
@@ -188,7 +173,6 @@ with c2:
                         st.error(f"❌ {msg}")
         
         if btn_demo:
-            # DEMO MODE: always use deterministic
             if not (addr and len(addr) == 48 and re.match(r'^(UQ|EQ|0Q)[a-zA-Z0-9_-]{46}$', addr)):
                 st.error("❌ Invalid: 48 chars, UQ/EQ/0Q")
             else:
@@ -199,7 +183,6 @@ with c2:
                 st.rerun()
                 
     else:
-        # Connected state
         badge = "🎭 Demo" if st.session_state.demo else "🟢 Real"
         st.success(f"✅ {st.session_state.addr[:12]}... {badge}")
         st.metric("Balance", f"{st.session_state.bal:.4f} TON", badge)
@@ -207,27 +190,52 @@ with c2:
             st.session_state.update({"connected": False, "addr": "", "bal": 0, "demo": False})
             st.rerun()
 
-# Run buttons
+# ========== AI OPTIMIZATION BLOCK ==========
 run = st.button("🚀 Run AI Optimization", type="primary", disabled=not st.session_state.connected, key="run_btn")
 test = st.button("📤 Send Test Transaction", disabled=not st.session_state.connected, key="test_btn")
 
 if run:
-    with st.spinner("🤖 Analyzing..."):
+    with st.spinner("🤖 AI Analyzing..."):
         gas = fetch_gas_price(api_base)
         load = fetch_network_load(api_base)
-        should, sep, bat, sav, ton = calc_savings(ops, load, gas)
+        
+        # Call AI engine
+        try:
+            from core.ai_engine import get_ai_recommendation
+            result = get_ai_recommendation(ops, load, gas, st.session_state.bal)
+        except Exception as e:
+            # Fallback inline if import fails
+            result = {
+                "batch": ops >= 3 and load < 80,
+                "reason": "Fallback: standard conditions",
+                "savings_percent": 25 if (ops >= 3 and load < 80) else 0,
+                "confidence": 80,
+                "alternative_action": "",
+                "source": "Local fallback"
+            }
+        
         st.success("✅ AI Decision Ready!")
         a, b, c = st.columns(3)
-        a.metric("Batch?", "✅ Yes" if should else "❌ No")
-        b.metric("Savings", f"{sav:.1f}%")
-        c.metric("Confidence", "85%")
+        a.metric("Batch?", "✅ Yes" if result["batch"] else "❌ No")
+        b.metric("Savings", f"{result['savings_percent']:.1f}%")
+        c.metric("Confidence", f"{result['confidence']}%")
+        
         mode = "Demo" if st.session_state.demo else "Real"
-        st.info(f"🧠 {ops} ops • {load}% load • {gas} nanoTON • {mode} • {selected_network}")
+        source = result.get("source", "Unknown")
+        st.info(f"🧠 {ops} ops • {load}% load • {gas} nanoTON • {mode} • {selected_network}\n🔍 Source: {source}")
+        
+        st.markdown(f"**💡 Reason:** {result['reason']}")
+        if result.get("alternative_action") and not result["batch"]:
+            st.markdown(f"**🔄 Alternative:** {result['alternative_action']}")
+        
         x, y = st.columns(2)
-        x.error(f"❌ Without: {sep:.4f} TON")
-        y.success(f"✅ With AI: {bat:.4f} TON")
-        if ton > 0:
-            st.markdown(f"**💵 Save:** `{ton:.4f} TON`")
+        x.error(f"❌ Without batching: {ops * 0.005:.4f} TON")
+        batched_cost = (ops * 0.005) * (1 - result['savings_percent']/100) if result["batch"] else ops * 0.005
+        y.success(f"✅ With AI optimization: {batched_cost:.4f} TON")
+        
+        savings_ton = (ops * 0.005) - batched_cost
+        if savings_ton > 0:
+            st.markdown(f"**💵 You save:** `{savings_ton:.4f} TON`")
 
 if test:
     st.success("✅ Transaction ready!")
@@ -236,4 +244,4 @@ if test:
     st.caption(f"🔍 [View on Explorer]({explorer_link})")
 
 st.markdown("---")
-st.caption(f"🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **{selected_network.title()}** • Balance: tonapi.io • Gas/Load: toncenter API")
+st.caption(f"🔗 [GitHub](https://github.com/beardbull/ton-gas-optimizer-ai-agents) • **{selected_network.title()}** • Balance: tonapi.io • Gas/Load: toncenter • AI: OpenRouter")
