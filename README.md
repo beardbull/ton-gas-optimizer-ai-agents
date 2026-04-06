@@ -6,7 +6,7 @@
 
 **AI-powered gas optimization for TON blockchain agents**
 
-🔗 **Live Demo:** https://ton-gas-optimizer-ai-agents-....streamlit.app  
+🔗 **Live Demo:** https://ton-gas-optimizer-ai-agents.streamlit.app  
 🔗 **GitHub:** https://github.com/beardbull/ton-gas-optimizer-ai-agents
 
 ---
@@ -56,7 +56,7 @@ AI agents execute many small transactions → high gas costs on TON.
 ---
 
 ## 🚀 How to Use
-1. Open: https://ton-gas-optimizer-ai-agents-....streamlit.app
+1. Open: https://ton-gas-optimizer-ai-agents.streamlit.app
 2. Select Network in sidebar (🧪 Testnet or 🌐 Mainnet)
 3. Enter valid TON address (48 chars, starts with UQ/EQ/0Q)
 4. Click 🔗 Real (fetch from API) or 🎭 Demo (deterministic)
@@ -70,3 +70,15 @@ git clone https://github.com/beardbull/ton-gas-optimizer-ai-agents
 cd ton-gas-optimizer-ai-agents
 pip install -r requirements.txt
 streamlit run demo/app.py
+
+
+## 🔌 MCP API Endpoint
+For AI agent integration:
+
+\\\
+POST /mcp/tools/optimize_gas
+{ "ops": 10, "gas_nano": 5000, "load_percent": 65 }
+→ { "recommend": "batch", "savings_percent": 28.4 }
+\\\
+
+*Available after deploy at: https://<your-app>.streamlit.app:8000/docs*
