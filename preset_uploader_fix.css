@@ -1,0 +1,50 @@
+/* Вставь это в DARK_CSS секцию в demo/app.py (после секции с BUTTONS) */
+
+/* 🔥 FIXED: PRESET UPLOADER - EXACT MATCH WITH OTHER FIELDS 🔥 */
+div[data-testid="stFileUploader"],
+div[data-testid="stFileUploader"] > div,
+div[data-testid="stFileUploader"] > div > div,
+.stFileUploader,
+.stFileUploader > div,
+.stFileUploader > div > div {
+    background-color: #1E293B !important;
+    border: 1px solid #334155 !important;
+    border-radius: 8px !important;
+    padding: 0.5rem !important;
+}
+
+/* Button inside uploader - GREEN with BLACK text */
+.stFileUploader button,
+div[data-testid="stFileUploader"] button {
+    background-color: #10B981 !important;
+    color: #000000 !important;
+    border: none !important;
+    border-radius: 6px !important;
+    font-weight: 700 !important;
+    padding: 0.4rem 0.8rem !important;
+    margin: 0.5rem 0 !important;
+}
+.stFileUploader button:hover,
+div[data-testid="stFileUploader"] button:hover {
+    background-color: #059669 !important;
+    color: #000000 !important;
+}
+
+/* Text elements inside uploader */
+.stFileUploader label,
+.stFileUploader p,
+.stFileUploader span,
+div[data-testid="stFileUploader"] label,
+div[data-testid="stFileUploader"] p,
+div[data-testid="stFileUploader"] span {
+    color: #F8FAFC !important;
+    background-color: transparent !important;
+}
+
+/* Remove white background from file input area */
+.stFileUploader [data-testid="stFileInput"],
+div[data-testid="stFileUploader"] [data-testid="stFileInput"] {
+    background-color: #0F172A !important;
+    border: 1px dashed #10B981 !important;
+    border-radius: 6px !important;
+}
