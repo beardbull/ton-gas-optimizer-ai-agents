@@ -6,3 +6,5 @@ pandas
 fastapi
 uvicorn
 pydantic
+scikit-learn
+numpy

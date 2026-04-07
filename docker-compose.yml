@@ -1,29 +1,8 @@
 services:
   ton-gas-optimizer:
     build: .
-    container_name: ton-gas-optimizer
     ports:
-      - "8501:8501"
+      - "8502:8501"
     env_file:
       - .env
-    environment:
-      - NETWORK=testnet
-    volumes:
-      - ./demo:/app/demo
-      - ./core:/app/core
-      - ./.env:/app/.env:ro
     restart: unless-stopped
-    command: streamlit run demo/app.py
-
-  ton-gas-optimizer-api:
-    build: .
-    container_name: ton-gas-optimizer-api
-    ports:
-      - "8000:8000"
-    environment:
-      - NETWORK=testnet
-    volumes:
-      - ./core:/app/core
-      - ./server.py:/app/server.py
-    restart: unless-stopped
-    command: uvicorn server:app --host 0.0.0.0 --port 8000
